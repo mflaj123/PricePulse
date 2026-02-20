@@ -1,0 +1,5 @@
+{
+  "name": "PricePulse - Enterprise Price Comparison",
+  "description": "A sophisticated price comparison platform allowing data ingestion via CSV or BigQuery, integrated with Google Shopping SerpAPI for automated market intelligence.",
+  "requestFramePermissions": []
+}
