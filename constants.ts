@@ -9,24 +9,4 @@ export const LOCATIONS: LocationOption[] = [
   { value: 'au', label: 'Australia', domain: 'google.com.au', gl: 'au', hl: 'en' },
 ];
 
-export const MOCK_BQ_TABLES: BQTable[] = [
-  {
-    projectId: 'retail-data-warehouse',
-    datasetId: 'product_feeds',
-    tableId: 'master_catalog_v2',
-    schema: ['product_id', 'gtin_13', 'title', 'base_price', 'sale_price', 'currency', 'stock_level']
-  },
-  {
-    projectId: 'retail-data-warehouse',
-    datasetId: 'competitor_tracking',
-    tableId: 'target_list_q3',
-    schema: ['sku', 'ean', 'competitor_url', 'target_price']
-  }
-];
 
-export const MOCK_USER = {
-  id: 'u1',
-  name: 'Alex Mercer',
-  email: 'alex.m@agency.com',
-  avatar: 'https://picsum.photos/100/100'
-};

@@ -1,15 +1,16 @@
 import React from 'react';
 import { LogOut, BarChart3, Plus, ChevronDown } from 'lucide-react';
-import { MOCK_USER } from '../constants';
+import { User } from '../types';
 
 interface LayoutProps {
   children: React.ReactNode;
   onLogout: () => void;
   activeTab: 'dashboard' | 'new';
   onNavigate: (tab: 'dashboard' | 'new') => void;
+  user: User | null;
 }
 
-export const Layout: React.FC<LayoutProps> = ({ children, onLogout, activeTab, onNavigate }) => {
+export const Layout: React.FC<LayoutProps> = ({ children, onLogout, activeTab, onNavigate, user }) => {
   return (
     <div className="min-h-screen flex font-sans bg-brand-bg">
       {/* Sidebar - Deep Purple */}
@@ -67,13 +68,15 @@ export const Layout: React.FC<LayoutProps> = ({ children, onLogout, activeTab, o
             <span className="font-semibold text-brand-text">Price Comparison Projects</span>
           </div>
 
-          <div className="flex items-center space-x-6">
-            <div className="flex items-center cursor-pointer">
-              <img src={MOCK_USER.avatar} alt="User" className="w-8 h-8 rounded-full border border-gray-200" />
-              <span className="ml-3 text-sm font-medium text-brand-text">{MOCK_USER.name}</span>
-              <ChevronDown className="w-4 h-4 ml-2 text-brand-muted" />
+          {user && (
+            <div className="flex items-center space-x-6">
+              <div className="flex items-center cursor-pointer">
+                <img src={user.avatar} alt="User" className="w-8 h-8 rounded-full border border-gray-200" />
+                <span className="ml-3 text-sm font-medium text-brand-text">{user.name}</span>
+                <ChevronDown className="w-4 h-4 ml-2 text-brand-muted" />
+              </div>
             </div>
-          </div>
+          )}
         </header>
 
         <main className="flex-1 p-8 overflow-auto">

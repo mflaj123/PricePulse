@@ -9,11 +9,22 @@ export enum Frequency {
   MONTHLY = 'MONTHLY'
 }
 
+export interface BQProject {
+  projectId: string;
+  friendlyName: string;
+}
+
+export interface BQDataset {
+  datasetId: string;
+  projectId: string;
+}
+
 export interface BQTable {
   projectId: string;
   datasetId: string;
   tableId: string;
   schema: string[]; // Column names
+  type?: string; // TABLE, VIEW, etc.
 }
 
 export interface ScrapeConfig {

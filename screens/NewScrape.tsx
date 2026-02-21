@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '../components/Button';
-import { ScrapeSource, Frequency, BQTable } from '../types';
-import { LOCATIONS, MOCK_BQ_TABLES } from '../constants';
-import { UploadCloud, Database, Calendar, CheckCircle, ArrowRight, Terminal, Search } from 'lucide-react';
+import { ScrapeSource, Frequency, BQTable, BQProject, BQDataset } from '../types';
+import { LOCATIONS } from '../constants';
+import { UploadCloud, Database, Calendar, CheckCircle, ArrowRight, Terminal, Search, Loader2 } from 'lucide-react';
 import { generateDerivedTableSQL } from '../services/geminiService';
+import { listProjects, listDatasets, listTablesInDataset, getTableSchema } from '../services/bigQueryService';
 
 interface NewScrapeProps {
   onCancel: () => void;
@@ -17,7 +18,19 @@ export const NewScrape: React.FC<NewScrapeProps> = ({ onCancel, onSubmit }) => {
   const [file, setFile] = useState<File | null>(null);
   
   // BQ State
+  const [projects, setProjects] = useState<BQProject[]>([]);
+  const [selectedProject, setSelectedProject] = useState<BQProject | null>(null);
+  const [datasets, setDatasets] = useState<BQDataset[]>([]);
+  const [selectedDataset, setSelectedDataset] = useState<BQDataset | null>(null);
+  const [bqTables, setBqTables] = useState<BQTable[]>([]);
   const [selectedTable, setSelectedTable] = useState<BQTable | null>(null);
+
+  const [isLoadingProjects, setIsLoadingProjects] = useState(false);
+  const [isLoadingDatasets, setIsLoadingDatasets] = useState(false);
+  const [isLoadingTables, setIsLoadingTables] = useState(false);
+  const [isLoadingSchema, setIsLoadingSchema] = useState(false);
+  const [bqError, setBqError] = useState<string | null>(null);
+  
   const [gtinCol, setGtinCol] = useState('');
   const [priceCol, setPriceCol] = useState('');
   const [salePriceCol, setSalePriceCol] = useState('');
@@ -29,6 +42,91 @@ export const NewScrape: React.FC<NewScrapeProps> = ({ onCancel, onSubmit }) => {
   const [frequency, setFrequency] = useState<Frequency>(Frequency.WEEKLY);
 
   const currentLocation = LOCATIONS.find(l => l.value === selectedLocation) || LOCATIONS[0];
+
+  // Fetch Projects when BQ is selected
+  useEffect(() => {
+    if (sourceType === ScrapeSource.BIGQUERY && projects.length === 0) {
+      const fetchProjects = async () => {
+        setIsLoadingProjects(true);
+        setBqError(null);
+        try {
+          const data = await listProjects();
+          setProjects(data);
+          // Auto-select if only one project
+          if (data.length === 1) setSelectedProject(data[0]);
+        } catch (err) {
+          console.error("Failed to load projects", err);
+          setBqError("Failed to load projects.");
+        } finally {
+          setIsLoadingProjects(false);
+        }
+      };
+      fetchProjects();
+    }
+  }, [sourceType]);
+
+  // Fetch Datasets when Project selected
+  useEffect(() => {
+    if (selectedProject) {
+      const fetchDatasets = async () => {
+        setIsLoadingDatasets(true);
+        setDatasets([]);
+        setSelectedDataset(null);
+        setBqTables([]);
+        setSelectedTable(null);
+        try {
+          const data = await listDatasets(selectedProject.projectId);
+          setDatasets(data);
+        } catch (err) {
+          console.error("Failed to load datasets", err);
+          setBqError("Failed to load datasets.");
+        } finally {
+          setIsLoadingDatasets(false);
+        }
+      };
+      fetchDatasets();
+    }
+  }, [selectedProject]);
+
+  // Fetch Tables when Dataset selected
+  useEffect(() => {
+    if (selectedProject && selectedDataset) {
+      const fetchTables = async () => {
+        setIsLoadingTables(true);
+        setBqTables([]);
+        setSelectedTable(null);
+        try {
+          const data = await listTablesInDataset(selectedProject.projectId, selectedDataset.datasetId);
+          setBqTables(data);
+        } catch (err) {
+          console.error("Failed to load tables", err);
+          setBqError("Failed to load tables.");
+        } finally {
+          setIsLoadingTables(false);
+        }
+      };
+      fetchTables();
+    }
+  }, [selectedDataset]);
+
+  // Fetch Schema when Table selected
+  useEffect(() => {
+    if (selectedProject && selectedDataset && selectedTable) {
+      const fetchSchema = async () => {
+        setIsLoadingSchema(true);
+        try {
+          const schema = await getTableSchema(selectedProject.projectId, selectedDataset.datasetId, selectedTable.tableId);
+          setSelectedTable(prev => prev ? { ...prev, schema } : null);
+        } catch (err) {
+          console.error("Failed to load schema", err);
+          setBqError("Failed to load table schema.");
+        } finally {
+          setIsLoadingSchema(false);
+        }
+      };
+      fetchSchema();
+    }
+  }, [selectedTable?.tableId]); // Only trigger if tableId changes (to avoid loop when updating schema)
 
   useEffect(() => {
     if (step === 3 && sourceType === ScrapeSource.BIGQUERY && selectedTable && gtinCol && priceCol && clientName) {
@@ -69,7 +167,7 @@ export const NewScrape: React.FC<NewScrapeProps> = ({ onCancel, onSubmit }) => {
 
     try {
       // IMPORTANT: Replace this URL with your actual Cloud Run URL
-      const response = await fetch('https://shopping-backend-635452941137.europe-west2.run.app/setup_pipeline', {
+      const response = await fetch('https://shopping-backend-635452941137.europe-west2.run.app', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -159,55 +257,105 @@ export const NewScrape: React.FC<NewScrapeProps> = ({ onCancel, onSubmit }) => {
       ) : (
         <div className="space-y-4 bg-white p-6 rounded-xl border border-brand-border shadow-sm">
           <div>
-            <label className="block text-sm font-semibold text-brand-text mb-2">Select Source Table</label>
-            <div className="relative">
-              <Database className="absolute left-3 top-3.5 w-4 h-4 text-brand-muted" />
-              <select
-                onChange={(e) => setSelectedTable(MOCK_BQ_TABLES.find(t => t.tableId === e.target.value) || null)}
-                className="w-full bg-white border border-brand-border rounded-lg text-brand-text pl-10 p-3 focus:border-brand-purple outline-none appearance-none"
-              >
-                <option value="">-- Choose a table --</option>
-                {MOCK_BQ_TABLES.map(t => (
-                  <option key={t.tableId} value={t.tableId}>
-                    {t.projectId}.{t.datasetId}.{t.tableId}
-                  </option>
-                ))}
-              </select>
+            <label className="block text-sm font-semibold text-brand-text mb-4">Select Source Table</label>
+            
+            {/* Project Select */}
+            <div className="mb-4">
+                <label className="block text-xs uppercase font-bold text-brand-muted mb-1">Project</label>
+                <div className="relative">
+                    <select 
+                        className="w-full bg-white border border-brand-border rounded-lg text-brand-text p-3 focus:border-brand-purple outline-none appearance-none"
+                        value={selectedProject?.projectId || ''}
+                        onChange={(e) => setSelectedProject(projects.find(p => p.projectId === e.target.value) || null)}
+                        disabled={isLoadingProjects}
+                    >
+                        <option value="">Select Project...</option>
+                        {projects.map(p => <option key={p.projectId} value={p.projectId}>{p.friendlyName || p.projectId}</option>)}
+                    </select>
+                    {isLoadingProjects && <Loader2 className="absolute right-3 top-3.5 w-4 h-4 text-brand-purple animate-spin" />}
+                </div>
             </div>
+
+            {/* Dataset Select */}
+            <div className="mb-4">
+                <label className="block text-xs uppercase font-bold text-brand-muted mb-1">Dataset</label>
+                <div className="relative">
+                    <select 
+                        className="w-full bg-white border border-brand-border rounded-lg text-brand-text p-3 focus:border-brand-purple outline-none appearance-none"
+                        value={selectedDataset?.datasetId || ''}
+                        onChange={(e) => setSelectedDataset(datasets.find(d => d.datasetId === e.target.value) || null)}
+                        disabled={!selectedProject || isLoadingDatasets}
+                    >
+                        <option value="">Select Dataset...</option>
+                        {datasets.map(d => <option key={d.datasetId} value={d.datasetId}>{d.datasetId}</option>)}
+                    </select>
+                    {isLoadingDatasets && <Loader2 className="absolute right-3 top-3.5 w-4 h-4 text-brand-purple animate-spin" />}
+                </div>
+            </div>
+
+            {/* Table Select */}
+            <div className="mb-4">
+                <label className="block text-xs uppercase font-bold text-brand-muted mb-1">Table</label>
+                <div className="relative">
+                    <select 
+                        className="w-full bg-white border border-brand-border rounded-lg text-brand-text p-3 focus:border-brand-purple outline-none appearance-none"
+                        value={selectedTable?.tableId || ''}
+                        onChange={(e) => setSelectedTable(bqTables.find(t => t.tableId === e.target.value) || null)}
+                        disabled={!selectedDataset || isLoadingTables}
+                    >
+                        <option value="">Select Table...</option>
+                        {bqTables.map(t => <option key={t.tableId} value={t.tableId}>{t.tableId} {t.type ? `(${t.type})` : ''}</option>)}
+                    </select>
+                    {isLoadingTables && <Loader2 className="absolute right-3 top-3.5 w-4 h-4 text-brand-purple animate-spin" />}
+                </div>
+            </div>
+            
+            {bqError && <div className="text-sm text-red-500 mt-2 bg-red-50 p-3 rounded-lg border border-red-100">{bqError}</div>}
           </div>
 
           {selectedTable && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-brand-border">
-              <div>
-                <label className="block text-xs uppercase font-bold text-brand-muted mb-1">GTIN Column *</label>
-                <select 
-                  className="w-full bg-gray-50 border border-brand-border rounded-lg text-brand-text p-2.5 text-sm outline-none focus:ring-1 focus:ring-brand-purple"
-                  onChange={(e) => setGtinCol(e.target.value)}
-                >
-                  <option value="">Select...</option>
-                  {selectedTable.schema.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs uppercase font-bold text-brand-muted mb-1">Price Column *</label>
-                <select 
-                  className="w-full bg-gray-50 border border-brand-border rounded-lg text-brand-text p-2.5 text-sm outline-none focus:ring-1 focus:ring-brand-purple"
-                  onChange={(e) => setPriceCol(e.target.value)}
-                >
-                  <option value="">Select...</option>
-                  {selectedTable.schema.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs uppercase font-bold text-brand-muted mb-1">Sale Price (Opt)</label>
-                <select 
-                  className="w-full bg-gray-50 border border-brand-border rounded-lg text-brand-text p-2.5 text-sm outline-none focus:ring-1 focus:ring-brand-purple"
-                  onChange={(e) => setSalePriceCol(e.target.value)}
-                >
-                  <option value="">Select...</option>
-                  {selectedTable.schema.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
+              {isLoadingSchema ? (
+                 <div className="col-span-3 flex items-center justify-center py-4 text-brand-muted">
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Loading schema...
+                 </div>
+              ) : (
+                <>
+                  <div>
+                    <label className="block text-xs uppercase font-bold text-brand-muted mb-1">GTIN Column *</label>
+                    <select 
+                      className="w-full bg-gray-50 border border-brand-border rounded-lg text-brand-text p-2.5 text-sm outline-none focus:ring-1 focus:ring-brand-purple"
+                      onChange={(e) => setGtinCol(e.target.value)}
+                      value={gtinCol}
+                    >
+                      <option value="">Select...</option>
+                      {(selectedTable.schema || []).map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs uppercase font-bold text-brand-muted mb-1">Price Column *</label>
+                    <select 
+                      className="w-full bg-gray-50 border border-brand-border rounded-lg text-brand-text p-2.5 text-sm outline-none focus:ring-1 focus:ring-brand-purple"
+                      onChange={(e) => setPriceCol(e.target.value)}
+                      value={priceCol}
+                    >
+                      <option value="">Select...</option>
+                      {(selectedTable.schema || []).map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs uppercase font-bold text-brand-muted mb-1">Sale Price (Opt)</label>
+                    <select 
+                      className="w-full bg-gray-50 border border-brand-border rounded-lg text-brand-text p-2.5 text-sm outline-none focus:ring-1 focus:ring-brand-purple"
+                      onChange={(e) => setSalePriceCol(e.target.value)}
+                      value={salePriceCol}
+                    >
+                      <option value="">Select...</option>
+                      {(selectedTable.schema || []).map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>

@@ -10,10 +10,26 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
   const handleAuth = () => {
     setIsLoading(true);
-    // Simulate OAuth delay
-    setTimeout(() => {
-      onLogin();
-    }, 1500);
+    // 3. UPDATED LOGIN BUTTON: Open popup for OAuth flow
+    // We pass the current origin as a redirect_uri so the backend knows where to return
+    // (Assuming the backend supports this parameter)
+    const backendUrl = 'https://shopping-backend-635452941137.europe-west2.run.app/login';
+    const redirectUri = encodeURIComponent(window.location.origin);
+    const authUrl = `${backendUrl}?redirect_uri=${redirectUri}`;
+
+    const width = 600;
+    const height = 700;
+    const left = window.screen.width / 2 - width / 2;
+    const top = window.screen.height / 2 - height / 2;
+
+    window.open(
+      authUrl,
+      'oauth_popup',
+      `width=${width},height=${height},left=${left},top=${top}`
+    );
+    
+    // Reset loading state after a delay (popup handles the rest)
+    setTimeout(() => setIsLoading(false), 2000);
   };
 
   return (
@@ -31,11 +47,11 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
         <div className="space-y-6">
           <div className="p-4 bg-purple-50 border border-purple-100 rounded-lg text-sm text-brand-purple">
             <p className="mb-2 font-semibold">Secure Access</p>
-            <p className="text-purple-700">Please log in using your organization's Google Workspace account to access BigQuery resources.</p>
+            <p className="opacity-90">Please sign in with your authorized Google workspace account to access the dashboard.</p>
           </div>
 
-          <button 
-            onClick={handleAuth} 
+          <button
+            onClick={handleAuth}
             disabled={isLoading}
             className="w-full flex items-center justify-center space-x-3 px-6 py-3 rounded-full bg-white border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-purple"
           >
@@ -47,16 +63,12 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
             ) : (
               <>
                 <svg className="w-5 h-5" viewBox="0 0 24 24">
-                  <path fill="currentColor" d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.536-6.033-5.655s2.701-5.655,6.033-5.655c1.498,0,2.866,0.549,3.921,1.453l2.814-2.814C17.503,2.988,15.139,2,12.545,2C7.021,2,2.543,6.477,2.543,12s4.478,10,10.002,10c8.396,0,10.249-7.85,9.426-11.748L12.545,10.239z"/>
+                  <path fill="currentColor" d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.701-6.033-6.032s2.701-6.032,6.033-6.032c1.498,0,2.866,0.549,3.921,1.453l2.814-2.814C17.503,2.988,15.139,2,12.545,2C7.021,2,2.543,6.477,2.543,12s4.478,10,10.002,10c8.396,0,10.249-7.85,9.426-11.748L12.545,10.239z"/>
                 </svg>
                 <span>Continue with Google</span>
               </>
             )}
           </button>
-        </div>
-        
-        <div className="mt-8 text-center">
-          <span className="text-xs text-brand-muted">© 2024 PricePulse Analytics</span>
         </div>
       </div>
     </div>
